@@ -4,11 +4,13 @@ import requests
 from requests.packages.urllib3.util import Retry
 
 from access_token import get_access_token
+from connection import get_proxies, get_verify
 from logger import do_log, log_message
 
 from vocabulary import ThreatExchange as t
 from vocabulary import Paging as p
 from vocabulary import PagingCursor as pc
+from vocabulary import Response as R
 from errors import (
     pytxFetchError,
     pytxValueError
@@ -115,11 +117,16 @@ class Broker(object):
         """
 
         if resp.status_code != 200:
-            raise pytxFetchError('Response code: %s: %s, URL: %s' % (
-                resp.status_code,
-                resp.text,
-                resp.url)
-            )
+            error = json.loads(resp.text).get(R.ERROR, None)
+            response = {}
+            response['status_code'] = resp.status_code
+            response['url'] = resp.url
+            if error:
+                response[R.MESSAGE] = error.get(R.MESSAGE, None)
+                response[R.TYPE] = error.get(R.TYPE, None)
+                response[R.CODE] = error.get(R.CODE, None)
+                response[R.FBTRACE_ID] = error.get(R.FBTRACE_ID, None)
+            raise pytxFetchError(response)
         try:
             results = json.loads(resp.text)
         except:
@@ -147,8 +154,17 @@ class Broker(object):
             cls.validate_limit(limit)
 
     @classmethod
-    def build_get_parameters(cls, text=None, strict_text=None, type_=None, threat_type=None,
-                             fields=None, limit=None, since=None, until=None):
+    def build_get_parameters(cls,
+                             text=None,
+                             strict_text=None,
+                             type_=None,
+                             threat_type=None,
+                             fields=None,
+                             limit=None,
+                             since=None,
+                             until=None,
+                             owner=None,
+                             status=None):
         """
         Validate arguments and convert them into GET parameters.
 
@@ -168,6 +184,10 @@ class Broker(object):
         :type since: str
         :param until: The timestamp to limit the end of the search.
         :type until: str
+        :param owner: The owner to limit to.
+        :type owner: str
+        :param status: The status to limit to.
+        :type status: str
         :returns: dict
         """
 
@@ -190,6 +210,10 @@ class Broker(object):
             params[t.SINCE] = since
         if until:
             params[t.UNTIL] = until
+        if owner:
+            params[t.OWNER] = owner
+        if status:
+            params[t.STATUS] = status
         return params
 
     @classmethod
@@ -214,7 +238,7 @@ class Broker(object):
         return session
 
     @classmethod
-    def get(cls, url, params=None, retries=None):
+    def get(cls, url, params=None, retries=None, proxies=None, verify=None):
         """
         Send a GET request.
 
@@ -224,18 +248,27 @@ class Broker(object):
         :type params: dict
         :param retries: Number of retries before stopping.
         :type retries: int
+        :param proxies: proxy info for requests.
+        :type proxies: dict
+        :param verify: verify info for requests.
+        :type verify: bool, str
         :returns: dict (using json.loads())
         """
+
         if not params:
             params = dict()
+        if proxies is None:
+            proxies = get_proxies()
+        if verify is None:
+            verify = get_verify()
 
         params[t.ACCESS_TOKEN] = get_access_token()
         session = cls.build_session(retries)
-        resp = session.get(url, params=params)
+        resp = session.get(url, params=params, proxies=proxies, verify=verify)
         return cls.handle_results(resp)
 
     @classmethod
-    def post(cls, url, params=None, retries=None):
+    def post(cls, url, params=None, retries=None, proxies=None, verify=None):
         """
         Send a POST request.
 
@@ -245,19 +278,27 @@ class Broker(object):
         :type params: dict
         :param retries: Number of retries before stopping.
         :type retries: int
+        :param proxies: proxy info for requests.
+        :type proxies: dict
+        :param verify: verify info for requests.
+        :type verify: bool, str
         :returns: dict (using json.loads())
         """
 
         if not params:
             params = dict()
+        if proxies is None:
+            proxies = get_proxies()
+        if verify is None:
+            verify = get_verify()
 
         params[t.ACCESS_TOKEN] = get_access_token()
         session = cls.build_session(retries)
-        resp = session.post(url, params=params)
+        resp = session.post(url, params=params, proxies=proxies, verify=verify)
         return cls.handle_results(resp)
 
     @classmethod
-    def delete(cls, url, params=None, retries=None):
+    def delete(cls, url, params=None, retries=None, proxies=None, verify=None):
         """
         Send a DELETE request.
 
@@ -267,20 +308,28 @@ class Broker(object):
         :type params: dict
         :param retries: Number of retries before stopping.
         :type retries: int
+        :param proxies: proxy info for requests.
+        :type proxies: dict
+        :param verify: verify info for requests.
+        :type verify: bool, str
         :returns: dict (using json.loads())
         """
 
         if not params:
             params = dict()
+        if proxies is None:
+            proxies = get_proxies()
+        if verify is None:
+            verify = get_verify()
 
         params[t.ACCESS_TOKEN] = get_access_token()
         session = cls.build_session(retries)
-        resp = session.delete(url, params=params)
+        resp = session.delete(url, params=params, proxies=proxies, verify=verify)
         return cls.handle_results(resp)
 
     @classmethod
     def get_generator(cls, klass, url, to_dict=False, params=None,
-                      retries=None):
+                      retries=None, proxies=None, verify=None):
         """
         Generator for managing GET requests. For each GET request it will yield
         the next object in the results until there are no more objects. If the
@@ -299,6 +348,10 @@ class Broker(object):
         :type params: dict
         :param retries: Number of retries before stopping.
         :type retries: int
+        :param proxies: proxy info for requests.
+        :type proxies: dict
+        :param verify: verify info for requests.
+        :type verify: bool, str
         :returns: Generator
         """
 
@@ -306,9 +359,14 @@ class Broker(object):
             raise pytxValueError('Must provide a valid object to query.')
         if not params:
             params = dict()
+        if proxies is None:
+            proxies = get_proxies()
+        if verify is None:
+            verify = get_verify()
         next_ = True
         while next_:
-            results = cls.get(url, params, retries)
+            results = cls.get(url, params=params, retries=retries,
+                              proxies=proxies, verify=verify)
             if do_log():
                 try:
                     before = results[t.PAGING][p.CURSORS].get(pc.BEFORE, 'None')

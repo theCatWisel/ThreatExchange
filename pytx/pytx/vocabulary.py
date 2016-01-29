@@ -5,7 +5,7 @@ class ThreatExchange(object):
     """
 
     URL = 'https://graph.facebook.com/'
-    VERSION = 'v2.4/'
+    VERSION = 'v2.5/'
     ACCESS_TOKEN = 'access_token'
     DEFAULT_LIMIT = 25
 
@@ -20,6 +20,7 @@ class ThreatExchange(object):
     LIMIT = 'limit'
     OWNER = 'owner'
     SINCE = 'since'
+    STATUS = 'status'
     STRICT_TEXT = 'strict_text'
     TEXT = 'text'
     THREAT_TYPE = 'threat_type'
@@ -155,6 +156,11 @@ class Response(object):
 
     SUCCESS = 'success'
     ID = 'id'
+    ERROR = 'error'
+    MESSAGE = 'message'
+    TYPE = 'type'
+    CODE = 'code'
+    FBTRACE_ID = 'fbtrace_id'
 
 
 class ThreatExchangeMember(object):

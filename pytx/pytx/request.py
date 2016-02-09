@@ -4,7 +4,7 @@ import requests
 from requests.packages.urllib3.util import Retry
 
 from access_token import get_access_token
-from connection import get_proxies, get_verify
+from connection import get_headers, get_proxies, get_verify
 from logger import do_log, log_message
 
 from vocabulary import ThreatExchange as t
@@ -159,12 +159,18 @@ class Broker(object):
                              strict_text=None,
                              type_=None,
                              threat_type=None,
+                             sample_type=None,
                              fields=None,
                              limit=None,
                              since=None,
                              until=None,
+                             include_expired=None,
+                             max_confidence=None,
+                             min_confidence=None,
                              owner=None,
-                             status=None):
+                             status=None,
+                             review_status=None,
+                             share_level=None):
         """
         Validate arguments and convert them into GET parameters.
 
@@ -176,6 +182,8 @@ class Broker(object):
         :type type_: str
         :param threat_type: The Threat type to limit to.
         :type threat_type: str
+        :param sample_type: The Sample type to limit to.
+        :type sample_type: str
         :param fields: Select specific fields to pull
         :type fields: str, list
         :param limit: The maximum number of objects to return.
@@ -184,10 +192,21 @@ class Broker(object):
         :type since: str
         :param until: The timestamp to limit the end of the search.
         :type until: str
-        :param owner: The owner to limit to.
+        :param include_expired: Include expired content in your results.
+        :type until: bool, str, int
+        :param max_confidence: The max confidence level to search for.
+        :type max_confidence: int
+        :param min_confidence: The min confidence level to search for.
+        :type min_confidence: int
+        :param owner: The owner to limit to. This can be comma-delimited to
+                      include multiple owners.
         :type owner: str
         :param status: The status to limit to.
         :type status: str
+        :param review_status: The review status to limit to.
+        :type review_status: str
+        :param share_level: The share level to limit to.
+        :type share_level: str
         :returns: dict
         """
 
@@ -210,10 +229,22 @@ class Broker(object):
             params[t.SINCE] = since
         if until:
             params[t.UNTIL] = until
+        if include_expired is not None:
+            params[t.INCLUDE_EXPIRED] = include_expired
+        if max_confidence:
+            params[t.MAX_CONFIDENCE] = max_confidence
+        if min_confidence:
+            params[t.MIN_CONFIDENCE] = min_confidence
         if owner:
             params[t.OWNER] = owner
+        if sample_type:
+            params[t.SAMPLE_TYPE] = sample_type
         if status:
             params[t.STATUS] = status
+        if review_status:
+            params[t.REVIEW_STATUS] = review_status
+        if share_level:
+            params[t.SHARE_LEVEL] = share_level
         return params
 
     @classmethod
@@ -238,7 +269,13 @@ class Broker(object):
         return session
 
     @classmethod
-    def get(cls, url, params=None, retries=None, proxies=None, verify=None):
+    def get(cls,
+            url,
+            params=None,
+            retries=None,
+            headers=None,
+            proxies=None,
+            verify=None):
         """
         Send a GET request.
 
@@ -248,6 +285,8 @@ class Broker(object):
         :type params: dict
         :param retries: Number of retries before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -257,6 +296,8 @@ class Broker(object):
 
         if not params:
             params = dict()
+        if headers is None:
+            headers = get_headers()
         if proxies is None:
             proxies = get_proxies()
         if verify is None:
@@ -264,11 +305,21 @@ class Broker(object):
 
         params[t.ACCESS_TOKEN] = get_access_token()
         session = cls.build_session(retries)
-        resp = session.get(url, params=params, proxies=proxies, verify=verify)
+        resp = session.get(url,
+                           params=params,
+                           headers=headers,
+                           proxies=proxies,
+                           verify=verify)
         return cls.handle_results(resp)
 
     @classmethod
-    def post(cls, url, params=None, retries=None, proxies=None, verify=None):
+    def post(cls,
+             url,
+             params=None,
+             retries=None,
+             headers=None,
+             proxies=None,
+             verify=None):
         """
         Send a POST request.
 
@@ -278,6 +329,8 @@ class Broker(object):
         :type params: dict
         :param retries: Number of retries before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -287,6 +340,8 @@ class Broker(object):
 
         if not params:
             params = dict()
+        if headers is None:
+            headers = get_headers()
         if proxies is None:
             proxies = get_proxies()
         if verify is None:
@@ -294,11 +349,21 @@ class Broker(object):
 
         params[t.ACCESS_TOKEN] = get_access_token()
         session = cls.build_session(retries)
-        resp = session.post(url, params=params, proxies=proxies, verify=verify)
+        resp = session.post(url,
+                            params=params,
+                            headers=headers,
+                            proxies=proxies,
+                            verify=verify)
         return cls.handle_results(resp)
 
     @classmethod
-    def delete(cls, url, params=None, retries=None, proxies=None, verify=None):
+    def delete(cls,
+               url,
+               params=None,
+               retries=None,
+               headers=None,
+               proxies=None,
+               verify=None):
         """
         Send a DELETE request.
 
@@ -308,6 +373,8 @@ class Broker(object):
         :type params: dict
         :param retries: Number of retries before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -317,6 +384,8 @@ class Broker(object):
 
         if not params:
             params = dict()
+        if headers is None:
+            headers = get_headers()
         if proxies is None:
             proxies = get_proxies()
         if verify is None:
@@ -324,12 +393,23 @@ class Broker(object):
 
         params[t.ACCESS_TOKEN] = get_access_token()
         session = cls.build_session(retries)
-        resp = session.delete(url, params=params, proxies=proxies, verify=verify)
+        resp = session.delete(url,
+                              params=params,
+                              headers=headers,
+                              proxies=proxies,
+                              verify=verify)
         return cls.handle_results(resp)
 
     @classmethod
-    def get_generator(cls, klass, url, to_dict=False, params=None,
-                      retries=None, proxies=None, verify=None):
+    def get_generator(cls,
+                      klass,
+                      url,
+                      to_dict=False,
+                      params=None,
+                      retries=None,
+                      headers=None,
+                      proxies=None,
+                      verify=None):
         """
         Generator for managing GET requests. For each GET request it will yield
         the next object in the results until there are no more objects. If the
@@ -348,6 +428,8 @@ class Broker(object):
         :type params: dict
         :param retries: Number of retries before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -359,14 +441,20 @@ class Broker(object):
             raise pytxValueError('Must provide a valid object to query.')
         if not params:
             params = dict()
+        if headers is None:
+            headers = get_headers()
         if proxies is None:
             proxies = get_proxies()
         if verify is None:
             verify = get_verify()
         next_ = True
         while next_:
-            results = cls.get(url, params=params, retries=retries,
-                              proxies=proxies, verify=verify)
+            results = cls.get(url,
+                              params=params,
+                              retries=retries,
+                              headers=headers,
+                              proxies=proxies,
+                              verify=verify)
             if do_log():
                 try:
                     before = results[t.PAGING][p.CURSORS].get(pc.BEFORE, 'None')

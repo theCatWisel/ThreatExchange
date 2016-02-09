@@ -15,7 +15,7 @@ from errors import (
 class class_or_instance_method(object):
 
     """
-    Custom decorator. This binds to the class if no instance is avaialble,
+    Custom decorator. This binds to the class if no instance is available,
     otherwise it will bind to the instance.
 
     This allows us to use a single method which can take both "self" and "cls"
@@ -70,7 +70,7 @@ class Common(object):
 
         object.__setattr__(self, name, value)
         if name == c.ID:
-            self._DETAILS = t.URL + value + '/'
+            self._DETAILS = t.URL + t.VERSION + value + '/'
             self._RELATED = self._DETAILS + t.RELATED
         if name not in self._changed and name in self._fields:
             self._changed.append(name)
@@ -141,16 +141,23 @@ class Common(object):
                 strict_text=False,
                 type_=None,
                 threat_type=None,
+                sample_type=None,
                 fields=None,
                 limit=None,
                 since=None,
                 until=None,
+                include_expired=False,
+                max_confidence=None,
+                min_confidence=None,
                 owner=None,
                 status=None,
+                review_status=None,
+                share_level=None,
                 __raw__=None,
                 full_response=False,
                 dict_generator=False,
                 retries=None,
+                headers=None,
                 proxies=None,
                 verify=None):
         """
@@ -164,6 +171,8 @@ class Common(object):
         :type type_: str
         :param threat_type: The Threat type to limit to.
         :type threat_type: str
+        :param sample_type: The Sample type to limit to.
+        :type sample_type: str
         :param fields: Select specific fields to pull
         :type fields: str, list
         :param limit: The maximum number of objects to return.
@@ -172,10 +181,21 @@ class Common(object):
         :type since: str
         :param until: The timestamp to limit the end of the search.
         :type until: str
-        :param owner: The owner to limit to.
+        :param include_expired: Include expired content in your results.
+        :type include_expired: bool
+        :param max_confidence: The max confidence level to search for.
+        :type max_confidence: int
+        :param min_confidence: The min confidence level to search for.
+        :type min_confidence: int
+        :param owner: The owner to limit to. This can be comma-delimited to
+                      include multiple owners.
         :type owner: str
         :param status: The status to limit to.
         :type status: str
+        :param review_status: The review status to limit to.
+        :type review_status: str
+        :param share_level: The share level to limit to.
+        :type share_level: str
         :param __raw__: Provide a dictionary to force as GET parameters.
                         Overrides all other arguments.
         :type __raw__: dict
@@ -187,6 +207,8 @@ class Common(object):
         :type dict_generator: bool
         :param retries: Number of retries to fetch a page before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -205,22 +227,33 @@ class Common(object):
                 strict_text=strict_text,
                 type_=type_,
                 threat_type=threat_type,
+                sample_type=sample_type,
                 fields=fields,
                 limit=limit,
                 since=since,
                 until=until,
+                include_expired=include_expired,
+                max_confidence=max_confidence,
+                min_confidence=min_confidence,
                 owner=owner,
-                status=status
+                status=status,
+                review_status=review_status,
+                share_level=share_level
             )
         if full_response:
-            return Broker.get(cls._URL, params=params, retries=retries,
-                              proxies=proxies, verify=verify)
+            return Broker.get(cls._URL,
+                              params=params,
+                              retries=retries,
+                              headers=headers,
+                              proxies=proxies,
+                              verify=verify)
         else:
             return Broker.get_generator(cls,
                                         cls._URL,
                                         to_dict=dict_generator,
                                         params=params,
                                         retries=retries,
+                                        headers=headers,
                                         proxies=proxies,
                                         verify=verify)
 
@@ -228,18 +261,16 @@ class Common(object):
     def details(cls_or_self,
                 id=None,
                 fields=None,
-                connection=None,
                 full_response=False,
                 dict_generator=False,
                 retries=None,
+                headers=None,
                 proxies=None,
                 verify=None,
                 metadata=False):
         """
         Get object details. Allows you to limit the fields returned in the
-        object's details. Also allows you to provide a connection. If a
-        connection is provided, the related objects will be returned instead
-        of the object itself.
+        object's details.
 
         NOTE: This method can be used on both instantiated and uninstantiated
         classes like so:
@@ -261,8 +292,6 @@ class Common(object):
         :type id: str
         :param fields: The fields to limit the details to.
         :type fields: None, str, list
-        :param connection: The connection to find other related objects with.
-        :type connection: None, str
         :param full_response: Return the full response instead of the generator.
                               Takes precedence over dict_generator.
         :type full_response: bool
@@ -271,6 +300,8 @@ class Common(object):
         :type dict_generator: bool
         :param retries: Number of retries to fetch a page before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -284,8 +315,6 @@ class Common(object):
             url = t.URL + t.VERSION + id + '/'
         else:
             url = cls_or_self._DETAILS
-        if connection:
-            url = url + connection + '/'
         params = Broker.build_get_parameters()
         if isinstance(fields, basestring):
             fields = fields.split(',')
@@ -296,48 +325,138 @@ class Common(object):
         if metadata:
             params[t.METADATA] = 1
         if full_response:
-            return Broker.get(url, params=params, retries=retries,
-                              proxies=proxies, verify=verify)
+            return Broker.get(url,
+                              params=params,
+                              retries=retries,
+                              headers=headers,
+                              proxies=proxies,
+                              verify=verify)
         else:
-            if connection:
-                # Avoid circular imports
-                from malware import Malware
-                from malware_family import MalwareFamily
-                from threat_indicator import ThreatIndicator
-                from threat_descriptor import ThreatDescriptor
-                conns = {
-                    conn.DESCRIPTORS: ThreatDescriptor,
-                    conn.DROPPED: Malware,
-                    conn.DROPPED_BY: Malware,
-                    conn.FAMILIES: MalwareFamily,
-                    conn.MALWARE_ANALYSES: Malware,
-                    conn.RELATED: ThreatIndicator,
-                    conn.THREAT_INDICATORS: ThreatIndicator,
-                    conn.VARIANTS: Malware,
-                }
-                klass = conns.get(connection, None)
-                return Broker.get_generator(klass,
-                                            url,
-                                            to_dict=dict_generator,
-                                            params=params,
-                                            retries=retries,
-                                            proxies=proxies,
-                                            verify=verify)
+            if isinstance(cls_or_self, type):
+                return Broker.get_new(cls_or_self,
+                                      Broker.get(url,
+                                                 params=params,
+                                                 retries=retries,
+                                                 headers=headers,
+                                                 proxies=proxies,
+                                                 verify=verify))
             else:
-                if isinstance(cls_or_self, type):
-                    return Broker.get_new(cls_or_self,
-                                          Broker.get(url,
-                                                     params=params,
-                                                     retries=retries,
-                                                     proxies=proxies,
-                                                     verify=verify))
-                else:
-                    cls_or_self.populate(Broker.get(url,
-                                                    params=params,
-                                                    retries=retries,
-                                                    proxies=proxies,
-                                                    verify=verify))
-                    cls_or_self._changed = []
+                cls_or_self.populate(Broker.get(url,
+                                                params=params,
+                                                retries=retries,
+                                                headers=headers,
+                                                proxies=proxies,
+                                                verify=verify))
+                cls_or_self._changed = []
+
+    @class_or_instance_method
+    def connections(cls_or_self,
+                    id=None,
+                    connection=None,
+                    fields=None,
+                    limit=None,
+                    full_response=False,
+                    dict_generator=False,
+                    request_dict=False,
+                    retries=None,
+                    headers=None,
+                    proxies=None,
+                    verify=None,
+                    metadata=False):
+        """
+        Get object connections. Allows you to limit the fields returned for the
+        objects.
+
+        NOTE: This method can be used on both instantiated and uninstantiated
+        classes like so:
+
+            foo = ThreatIndicator(id='1234')
+            foo.connections(connections='foo')
+
+            foo = ThreatIndicator.connetions(id='1234'
+                                             connections='foo')
+
+        :param id: The ID of the object to get connections for if the class is
+                   not instantiated.
+        :type id: str
+        :param fields: The fields to limit the details to.
+        :type fields: None, str, list
+        :param limit: Limit the results.
+        :type limit: None, int
+        :param connection: The connection to find other related objects with.
+        :type connection: None, str
+        :param full_response: Return the full response instead of the generator.
+                              Takes precedence over dict_generator.
+        :type full_response: bool
+        :param dict_generator: Return a dictionary instead of an instantiated
+                               object.
+        :type dict_generator: bool
+        :param request_dict: Return a request dictionary only.
+        :type request_dict: bool
+        :param retries: Number of retries to fetch a page before stopping.
+        :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
+        :param proxies: proxy info for requests.
+        :type proxies: dict
+        :param verify: verify info for requests.
+        :type verify: bool, str
+        :param metadata: Get extra metadata in the response.
+        :type metadata: bool
+        :returns: Generator, dict, class, str
+        """
+
+        if isinstance(cls_or_self, type):
+            url = t.URL + t.VERSION + id + '/'
+        else:
+            url = cls_or_self._DETAILS
+        if connection:
+            url = url + connection + '/'
+        params = Broker.build_get_parameters(limit=limit)
+        if isinstance(fields, basestring):
+            fields = fields.split(',')
+        if fields is not None and not isinstance(fields, list):
+            raise pytxValueError('fields must be a list')
+        if fields is not None:
+            params[t.FIELDS] = ','.join(f.strip() for f in fields)
+        if metadata:
+            params[t.METADATA] = 1
+        if request_dict:
+            return Broker.request_dict('GET',
+                                       url,
+                                       params=params)
+        if full_response:
+            return Broker.get(url,
+                              params=params,
+                              retries=retries,
+                              headers=headers,
+                              proxies=proxies,
+                              verify=verify)
+        else:
+            # Avoid circular imports
+            from malware import Malware
+            from malware_family import MalwareFamily
+            from threat_indicator import ThreatIndicator
+            from threat_descriptor import ThreatDescriptor
+            conns = {
+                conn.DESCRIPTORS: ThreatDescriptor,
+                conn.DROPPED: Malware,
+                conn.DROPPED_BY: Malware,
+                conn.FAMILIES: MalwareFamily,
+                conn.MALWARE_ANALYSES: Malware,
+                conn.RELATED: ThreatIndicator,
+                conn.THREAT_INDICATORS: ThreatIndicator,
+                conn.VARIANTS: Malware,
+            }
+            klass = conns.get(connection, None)
+            return Broker.get_generator(klass,
+                                        url,
+                                        to_dict=dict_generator,
+                                        params=params,
+                                        retries=retries,
+                                        headers=headers,
+                                        proxies=proxies,
+                                        verify=verify)
 
     def get_changed(self):
         """
@@ -352,7 +471,12 @@ class Common(object):
         )
 
     @classmethod
-    def new(cls, params, retries=None, proxies=None, verify=None):
+    def new(cls,
+            params,
+            retries=None,
+            headers=None,
+            proxies=None,
+            verify=None):
         """
         Submit params to the graph to add an object. We will submit to the
         object URL used for creating new objects in the graph. When submitting
@@ -363,6 +487,8 @@ class Common(object):
         :type params: dict
         :param retries: Number of retries to submit before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -370,17 +496,27 @@ class Common(object):
         :returns: dict (using json.loads())
         """
 
-        if td.PRIVACY_TYPE not in params:
-            raise pytxValueError('Must provide a %s' % td.PRIVACY_TYPE)
-            pass
-        else:
-            if (params[td.PRIVACY_TYPE] != pt.VISIBLE and
-                    len(params[td.PRIVACY_MEMBERS].split(',')) < 1):
-                raise pytxValueError('Must provide %s' % td.PRIVACY_MEMBERS)
-        return Broker.post(cls._URL, params=params, retries=retries,
-                           proxies=proxies, verify=verify)
+        if cls.__name__ != 'ThreatPrivacyGroup':
+            if td.PRIVACY_TYPE not in params:
+                raise pytxValueError('Must provide a %s' % td.PRIVACY_TYPE)
+                pass
+            else:
+                if (params[td.PRIVACY_TYPE] != pt.VISIBLE and
+                        len(params[td.PRIVACY_MEMBERS].split(',')) < 1):
+                    raise pytxValueError('Must provide %s' % td.PRIVACY_MEMBERS)
+        return Broker.post(cls._URL,
+                           params=params,
+                           retries=retries,
+                           headers=headers,
+                           proxies=proxies,
+                           verify=verify)
 
-    def save(self, params=None, retries=None, proxies=None, verify=None):
+    def save(self,
+             params=None,
+             retries=None,
+             headers=None,
+             proxies=None,
+             verify=None):
         """
         Submit changes to the graph to update an object. We will determine the
         Details URL and submit there (used for updating an existing object). If
@@ -391,6 +527,8 @@ class Common(object):
         :type params: dict
         :param retries: Number of retries to submit before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -400,12 +538,22 @@ class Common(object):
 
         if params is None:
             params = self.get_changed()
-        return Broker.post(self._DETAILS, params=params, retries=retries,
-                           proxies=proxies, verify=verify)
+        return Broker.post(self._DETAILS,
+                           params=params,
+                           retries=retries,
+                           headers=headers,
+                           proxies=proxies,
+                           verify=verify)
 
     @class_or_instance_method
-    def send(cls_or_self, id_=None, params=None, type_=None, retries=None,
-             proxies=None, verify=None):
+    def send(cls_or_self,
+             id_=None,
+             params=None,
+             type_=None,
+             retries=None,
+             headers=None,
+             proxies=None,
+             verify=None):
         """
         Send custom params to the object URL. If `id` is provided it will be
         appended to the URL. If this is an uninstantiated class we will use the
@@ -422,6 +570,8 @@ class Common(object):
         :type type_: str
         :param retries: Number of retries to submit before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -442,13 +592,26 @@ class Common(object):
         if params is None:
             params = {}
         if type_ == 'GET':
-            return Broker.get(url, params=params, retries=retries,
-                              proxies=proxies, verify=verify)
+            return Broker.get(url,
+                              params=params,
+                              retries=retries,
+                              headers=headers,
+                              proxies=proxies,
+                              verify=verify)
         else:
-            return Broker.post(url, params=params, retries=retries,
-                               proxies=proxies, verify=verify)
+            return Broker.post(url,
+                               params=params,
+                               retries=retries,
+                               headers=headers,
+                               proxies=proxies,
+                               verify=verify)
 
-    def expire(self, timestamp, retries=None, proxies=None, verify=None):
+    def expire(self,
+               timestamp,
+               retries=None,
+               headers=None,
+               proxies=None,
+               verify=None):
         """
         Expire by setting the 'expired_on' timestamp.
 
@@ -456,6 +619,8 @@ class Common(object):
         :type timestamp: str
         :param retries: Number of retries to submit before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -467,10 +632,19 @@ class Common(object):
         params = {
             td.EXPIRED_ON: timestamp
         }
-        return Broker.post(self._DETAILS, params=params, retries=retries,
-                           proxies=proxies, verify=verify)
+        return Broker.post(self._DETAILS,
+                           params=params,
+                           retries=retries,
+                           headers=headers,
+                           proxies=proxies,
+                           verify=verify)
 
-    def false_positive(self, object_id, retries=None, proxies=None, verify=None):
+    def false_positive(self,
+                       object_id,
+                       retries=None,
+                       headers=None,
+                       proxies=None,
+                       verify=None):
         """
         Mark an object as a false positive by setting the status to
         UNKNOWN.
@@ -479,6 +653,8 @@ class Common(object):
         :type object_id: str
         :param retries: Number of retries to submit before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -489,10 +665,19 @@ class Common(object):
         params = {
             c.STATUS: s.UNKNOWN
         }
-        return Broker.post(self._DETAILS, params=params, retries=retries,
-                           proxies=proxies, verify=verify)
+        return Broker.post(self._DETAILS,
+                           params=params,
+                           retries=retries,
+                           headers=headers,
+                           proxies=proxies,
+                           verify=verify)
 
-    def add_connection(self, object_id, retries=None, proxies=None, verify=None):
+    def add_connection(self,
+                       object_id,
+                       retries=None,
+                       headers=None,
+                       proxies=None,
+                       verify=None):
         """
         Use HTTP POST and add a connection between two objects.
 
@@ -500,6 +685,8 @@ class Common(object):
         :type object_id: str
         :param retries: Number of retries to submit before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -510,12 +697,20 @@ class Common(object):
         params = {
             t.RELATED_ID: object_id
         }
-        return Broker.post(self._RELATED, params=params, retries=retries,
-                           proxies=proxies, verify=verify)
+        return Broker.post(self._RELATED,
+                           params=params,
+                           retries=retries,
+                           headers=headers,
+                           proxies=proxies,
+                           verify=verify)
 
     # DELETE REQUESTS
 
-    def delete_connection(self, object_id, retries=None, proxies=None,
+    def delete_connection(self,
+                          object_id,
+                          retries=None,
+                          headers=None,
+                          proxies=None,
                           verify=None):
         """
         Use HTTP DELETE and remove the connection to another object.
@@ -524,6 +719,8 @@ class Common(object):
         :type object_id: str
         :param retries: Number of retries to submit before stopping.
         :type retries: int
+        :param headers: header info for requests.
+        :type headers: dict
         :param proxies: proxy info for requests.
         :type proxies: dict
         :param verify: verify info for requests.
@@ -534,5 +731,9 @@ class Common(object):
         params = {
             t.RELATED_ID: object_id
         }
-        return Broker.delete(self._RELATED, params=params, retries=retries,
-                             proxies=proxies, verify=verify)
+        return Broker.delete(self._RELATED,
+                             params=params,
+                             retries=retries,
+                             headers=headers,
+                             proxies=proxies,
+                             verify=verify)

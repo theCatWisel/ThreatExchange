@@ -50,10 +50,26 @@ class ThreatExchange(object):
     RELATED = 'related'
     RELATED_ID = 'related_id'
 
+    # BATCH
+    BATCH = 'batch'
+    INCLUDE_HEADERS = 'include_headers'
+    OMIT_RESPONSE_ON_SUCCESS = 'omit_response_on_success'
+
     # Environment Variables for init()
     TX_ACCESS_TOKEN = 'TX_ACCESS_TOKEN'
     TX_APP_ID = 'TX_APP_ID'
     TX_APP_SECRET = 'TX_APP_SECRET'
+
+
+class Batch(object):
+    """
+    Vocabulary used for batch operations.
+    """
+
+    METHOD = 'method'
+    RELATIVE_URL = 'relative_url'
+    BODY = 'body'
+    INCLUDE_HEADERS = 'include_headers'
 
 
 class Common(object):
@@ -262,6 +278,7 @@ class ThreatDescriptor(object):
     """
 
     ADDED_ON = 'added_on'
+    ATTACK_TYPE = 'attack_type'
     CONFIDENCE = 'confidence'
     DESCRIPTION = 'description'
     EXPIRED_ON = 'expired_on'
@@ -277,6 +294,7 @@ class ThreatDescriptor(object):
     REVIEW_STATUS = 'review_status'
     SEVERITY = 'severity'
     SHARE_LEVEL = Common.SHARE_LEVEL
+    SOURCE_URI = 'source_uri'
     STATUS = Common.STATUS
     SUBMITTER_COUNT = Common.SUBMITTER_COUNT
     THREAT_TYPE = 'threat_type'
